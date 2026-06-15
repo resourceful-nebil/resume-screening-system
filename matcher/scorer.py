@@ -45,12 +45,10 @@ class Scorer:
         resume_keywords: list[str],
         jd_requirements: dict,
     ) -> ScreeningResult:
-        required = {skill.lower() for skill in jd_requirements["required_skills"]}
-        preferred = {skill.lower() for skill in jd_requirements["preferred_skills"]}
+        required = {skill.lower() for skill in jd_requirements.get("required_skills", [])}
+        preferred = {skill.lower() for skill in jd_requirements.get("preferred_skills", [])}
         jd_keywords = [kw.lower() for kw in jd_requirements.get("keywords", [])]
         min_years = jd_requirements.get("min_years") or jd_requirements.get("min_experience") or 0
-        if not min_years:
-            min_years = self.experience_config.get("default_min_years", 0)
 
         resume_skills_lower = {skill.lower() for skill in resume_skills}
         required_matched = resume_skills_lower & required
@@ -62,12 +60,21 @@ class Scorer:
         experience_component = self._experience_score(resume_experience, min_years)
         keyword_component = self._keyword_score(resume_keywords, jd_keywords)
 
+        # Experience only counts when the candidate matches at least one required skill.
+        if required and not required_matched:
+            experience_component = 0.0
+            keyword_component = 0.0
+
         total = (
             required_component * self.weights["required_skills"]
             + preferred_component * self.weights["preferred_skills"]
             + experience_component * self.weights["experience"]
             + keyword_component * self.weights["keywords"]
         ) * 100
+
+        # Hard penalty: missing every required skill should never look like a top match.
+        if required and not required_matched:
+            total = min(total, 10.0)
 
         resume_keyword_set = {kw.lower() for kw in resume_keywords}
         jd_keyword_set = set(jd_keywords)
@@ -89,11 +96,14 @@ class Scorer:
         )
 
     def _skill_ratio(self, matched: int, total: int) -> float:
-        return matched / total if total else 1.0
+        if total == 0:
+            return 0.0
+        return matched / total
 
     def _experience_score(self, resume_exp: int, required_exp: int) -> float:
         if required_exp <= 0:
-            return 1.0 if resume_exp > 0 else 0.5
+            return 0.0
+
         if resume_exp >= required_exp:
             return 1.0
 
@@ -108,14 +118,11 @@ class Scorer:
 
     def _keyword_score(self, resume_keywords: list[str], jd_keywords: list[str]) -> float:
         if not jd_keywords:
-            return 1.0
+            return 0.0
 
         resume_keyword_set = {kw.lower() for kw in resume_keywords}
         jd_keyword_set = {kw.lower() for kw in jd_keywords}
         matched = resume_keyword_set & jd_keyword_set
-
-        if not jd_keyword_set:
-            return 1.0
 
         match_ratio = len(matched) / len(jd_keyword_set)
         frequency_bonus = 0.0

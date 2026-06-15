@@ -45,7 +45,7 @@ Experience:
 """
 
 
-ENGINE_CACHE_VERSION = 2
+ENGINE_CACHE_VERSION = 5
 
 
 @st.cache_resource
@@ -158,8 +158,21 @@ with col_btn:
     process_button = st.button("Start Screening", type="primary", use_container_width=True)
 
 if process_button:
-    if not jd_data and not jd_text.strip():
+    if not jd_text.strip():
         st.error("Please provide a job description.")
+        st.stop()
+
+    try:
+        jd_data = engine.parse_jd(jd_text) if jd_text.strip() else None
+    except Exception as exc:
+        st.error(f"Could not parse job description: {exc}")
+        st.stop()
+
+    if not jd_data or not jd_data.get("required_skills"):
+        st.error(
+            "No required skills were detected in the job description. "
+            "Add a **Required Skills:** section with bullet points, then try again."
+        )
         st.stop()
 
     resumes: list[ResumeInput] = []
@@ -190,7 +203,6 @@ if process_button:
     with st.spinner(f"Screening {len(resumes)} resumes..."):
         results = engine.screen_resumes(
             resumes,
-            jd_text=jd_text if jd_data is None else None,
             jd_requirements=jd_data,
             use_multiprocessing=use_multiprocessing,
             top_n=top_n,

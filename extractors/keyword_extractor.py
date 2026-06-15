@@ -70,12 +70,39 @@ class KeywordExtractor:
         for skills_dict in self.skills_taxonomy.values():
             for skill_name, variations in skills_dict.items():
                 for variation in variations:
+                    if len(variation.strip()) < 2:
+                        continue
                     pattern = r"\b" + re.escape(variation.strip()) + r"\b"
                     if re.search(pattern, text_lower):
                         found_skills.add(skill_name)
                         break
 
         return found_skills
+
+    def match_skill_phrase(self, phrase: str) -> set[str]:
+        """Map a JD bullet phrase to known taxonomy skill keys."""
+        phrase_lower = phrase.lower().strip()
+        phrase_lower = re.sub(r"[^\w\s\-+#.]", "", phrase_lower)
+        if not phrase_lower:
+            return set()
+
+        matched = set()
+        for skills_dict in self.skills_taxonomy.values():
+            for skill_name, variations in skills_dict.items():
+                if phrase_lower == skill_name:
+                    matched.add(skill_name)
+                    continue
+                normalized_variations = {v.lower().strip() for v in variations}
+                if phrase_lower in normalized_variations:
+                    matched.add(skill_name)
+                    continue
+                for variation in normalized_variations:
+                    if len(variation) < 3:
+                        continue
+                    if re.search(r"\b" + re.escape(variation) + r"\b", phrase_lower):
+                        matched.add(skill_name)
+                        break
+        return matched
 
     def extract_experience_years(self, text: str) -> int:
         text_lower = text.lower()
