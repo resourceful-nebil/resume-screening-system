@@ -7,6 +7,8 @@
   },
   "experience": {
     "default_min_years": 2,
-    "max_years_cap": 15
-  }
+    "max_years_cap": 50,
+    "tolerance": 2
+  },
+  "min_score": 0.0
 }
